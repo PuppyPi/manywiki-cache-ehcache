@@ -18,9 +18,12 @@
  */
 package org.apache.wiki.cache;
 
-import net.sf.ehcache.Cache;
-import net.sf.ehcache.CacheManager;
-import net.sf.ehcache.Element;
+import java.net.URL;
+import java.util.Collections;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.wiki.api.core.Engine;
@@ -28,14 +31,9 @@ import org.apache.wiki.api.engine.Initializable;
 import org.apache.wiki.api.exceptions.WikiException;
 import org.apache.wiki.util.CheckedSupplier;
 import org.apache.wiki.util.TextUtil;
-
-import java.io.Serializable;
-import java.net.URL;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.concurrent.ConcurrentHashMap;
+import net.sf.ehcache.Cache;
+import net.sf.ehcache.CacheManager;
+import net.sf.ehcache.Element;
 
 
 /**
@@ -64,7 +62,7 @@ public class EhcacheCachingManager implements CachingManager, Initializable {
     /** {@inheritDoc} */
     @Override
     public void initialize( final Engine engine, final Properties props ) throws WikiException {
-        final String cacheEnabled = TextUtil.getStringProperty( props, PROP_CACHE_ENABLE, PROP_USECACHE_DEPRECATED, "true" );
+        final String cacheEnabled = TextUtil.getStringProperty( props, PROP_CACHE_ENABLE, "true" );
         final boolean useCache = "true".equalsIgnoreCase( cacheEnabled );
         final String confLocation = "/" + TextUtil.getStringProperty( props, PROP_CACHE_CONF_FILE, "ehcache-jspwiki.xml" );
         if( useCache ) {
@@ -91,7 +89,7 @@ public class EhcacheCachingManager implements CachingManager, Initializable {
             cacheManager.addCache( cache );
         }
         cacheMap.put( cacheName, cache );
-        cacheStats.put( cacheName, new CacheInfo( cacheName, cache.getCacheConfiguration().getMaxEntriesLocalHeap() ) );
+        cacheStats.put( cacheName, new CacheInfo( cacheName, cache.getCacheConfiguration().getMaxEntriesLocalHeap(), () -> cache.size() ) );  //TODO if it's not cache.size() then fix this XD'
     }
 
     /** {@inheritDoc} */
@@ -114,17 +112,17 @@ public class EhcacheCachingManager implements CachingManager, Initializable {
      */
     @Override
     @SuppressWarnings( "unchecked" )
-    public List< String > keys( final String cacheName ) {
+    public Set< String > keys( final String cacheName ) {
         if( enabled( cacheName ) ) {
-            return cacheMap.get( cacheName ).getKeysWithExpiryCheck();
+            return cacheMap.get( cacheName ).getKeysWithExpiryCheck();  //TODO is there a Set version or should we make keys() return a Collection?
         }
-        return Collections.emptyList();
+        return Collections.emptySet();
     }
 
     /** {@inheritDoc} */
     @Override
     @SuppressWarnings( "unchecked" )
-    public < T, E extends Exception > T get( final String cacheName, final Serializable key, final CheckedSupplier< T, E > supplier ) throws E {
+    public < T, E extends Exception > T get( final String cacheName, final String key, final CheckedSupplier< T, E > supplier ) throws E {
         if( keyAndCacheAreNotNull( cacheName, key ) ) {
             final Element element = cacheMap.get( cacheName ).get( key );
             if( element != null ) {
@@ -145,7 +143,7 @@ public class EhcacheCachingManager implements CachingManager, Initializable {
 
     /** {@inheritDoc} */
     @Override
-    public void put( final String cacheName, final Serializable key, final Object val ) {
+    public void put( final String cacheName, final String key, final Object val ) {
         if( keyAndCacheAreNotNull( cacheName, key ) ) {
             cacheMap.get( cacheName ).put( new Element( key, val ) );
         }
@@ -153,13 +151,13 @@ public class EhcacheCachingManager implements CachingManager, Initializable {
 
     /** {@inheritDoc} */
     @Override
-    public void remove( final String cacheName, final Serializable key ) {
+    public void remove( final String cacheName, final String key ) {
         if( keyAndCacheAreNotNull( cacheName, key ) ) {
             cacheMap.get( cacheName ).remove( key );
         }
     }
 
-    boolean keyAndCacheAreNotNull( final String cacheName, final Serializable key ) {
+    boolean keyAndCacheAreNotNull( final String cacheName, final String key ) {
         return enabled( cacheName ) && key != null;
     }
 
