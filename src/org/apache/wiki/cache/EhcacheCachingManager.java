@@ -76,6 +76,7 @@ public class EhcacheCachingManager implements CachingManager, Initializable {
             registerCache( CACHE_PAGES );
             registerCache( CACHE_PAGES_HISTORY );
             registerCache( CACHE_PAGES_TEXT );
+            registerCache( CACHE_RSS );
         }
     }
 
